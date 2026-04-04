@@ -1,0 +1,255 @@
+"""
+Модуль для работы с YandexGPT API
+Лабораторная работа №1
+Дисциплина: Искусственный интеллект
+Автор: [Медведев]
+Группа: [НОМЕР ГРУППЫ]
+Дата: 2026
+"""
+import os
+import sys
+import logging
+from typing import Dict, Optional
+from datetime import datetime
+import requests
+from dotenv import load_dotenv
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class YandexGPTClient:
+    """
+    Клиент для взаимодействия с YandexGPT API.
+
+    Атрибуты:
+        iam_token (str): IAM-токен для аутентификации
+        folder_id (str): Идентификатор облачного каталога
+        model_uri (str): URI модели в формате gpt://folderId/modelName
+        api_url (str): URL API endpoint
+
+    Пример использования:
+        # >>> client = YandexGPTClient("your-iam-token", "your-folder-id")  # doctest: +SKIP
+        # >>> response = client.generate("Привет!")  # doctest: +SKIP
+        # >>> print(response["text"])  # doctest: +SKIP
+    """
+
+    def __init__(self, iam_token: str, folder_id: str):
+        """
+        Инициализация клиента YandexGPT.
+
+        Args:
+            iam_token: IAM-токен аутентификации Yandex Cloud
+            folder_id: Идентификатор каталога в Yandex Cloud
+
+        Raises:
+            ValueError: Если токены не переданы
+        """
+        if not iam_token or not folder_id:
+            raise ValueError("Необходимо указать iam_token и folder_id")
+
+        self.iam_token = iam_token
+        self.folder_id = folder_id
+        self.model_uri = f"gpt://{folder_id}/yandexgpt-lite"
+        self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+
+        logger.info(f"Клиент инициализирован. Folder ID: {folder_id}")
+
+    def generate(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1000
+    ) -> Dict:
+        """
+        Генерация ответа модели.
+
+        Args:
+            prompt: Текстовый запрос к модели
+            temperature: Параметр креативности (0.0-1.0)
+                - 0.0-0.3: точные, детерминированные ответы
+                - 0.5-0.7: сбалансированные ответы
+                - 0.8-1.0: креативные ответы
+            max_tokens: Максимальное количество токенов в ответе
+
+        Returns:
+            dict: Ответ API со структурой:
+                {
+                    "text": str,           # Сгенерированный текст
+                    "tokens_input": int,   # Количество входных токенов
+                    "tokens_output": int,  # Количество выходных токенов
+                    "raw_response": dict   # Полный ответ API
+                }
+
+        Raises:
+            requests.exceptions.RequestException: При ошибке сети
+            ValueError: При неверном ответе API
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.iam_token}",
+            "x-folder-id": self.folder_id
+        }
+
+        payload = {
+            "modelUri": self.model_uri,
+            "completionOptions": {
+                "stream": False,
+                "temperature": temperature,
+                "maxTokens": max_tokens
+            },
+            "messages": [
+                {
+                    "role": "system",
+                    "text": "Вы — полезный ассистент. Отвечайте точно и по делу. Используйте русский язык."
+                },
+                {
+                    "role": "user",
+                    "text": prompt
+                }
+            ]
+        }
+
+        try:
+            logger.info(f"Отправка запроса к API. Длина промпта: {len(prompt)} символов")
+
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+
+            result = response.json()
+
+            # Проверка структуры ответа
+            if "result" not in result:
+                raise ValueError("Некорректный формат ответа API: отсутствует 'result'")
+
+            alternatives = result["result"].get("alternatives", [])
+            if not alternatives:
+                raise ValueError("Пустой ответ от модели")
+
+            generated_text = alternatives[0]["message"]["text"]
+            tokens_info = result["result"].get("usage", {})
+
+            response_data = {
+                "text": generated_text,
+                "tokens_input": tokens_info.get("inputTextTokens", 0),
+                "tokens_output": tokens_info.get("completionTokens", 0),
+                "raw_response": result
+            }
+
+            logger.info(f"Запрос выполнен. Выходных токенов: {response_data['tokens_output']}")
+            return response_data
+
+        except requests.exceptions.Timeout:
+            logger.error("Превышено время ожидания ответа от API")
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ошибка запроса: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Тело ответа: {e.response.text}")
+            raise
+        except ValueError as e:
+            logger.error(f"Ошибка парсинга ответа: {e}")
+            raise
+
+    def test_connection(self) -> bool:
+        """
+        Проверка подключения к API.
+
+        Returns:
+            bool: True если подключение успешно
+        """
+        try:
+            test_prompt = "Ответь одним словом: работает"
+            response = self.generate(test_prompt, temperature=0.1)
+            logger.info(f"Тестовый ответ: {response['text']}")
+            return "работает" in response["text"].lower()
+        except Exception as e:
+            logger.error(f"Тест подключения не пройден: {e}")
+            return False
+
+
+def main():
+    """
+    Точка входа для тестирования клиента.
+    """
+    print("=" * 80)
+    print("ЛАБОРАТОРНАЯ РАБОТА №1")
+    print("Тестирование YandexGPT API")
+    print("=" * 80)
+
+    # Загрузка переменных окружения
+    load_dotenv()
+
+    iam_token = os.getenv("YANDEX_IAM_TOKEN")
+    folder_id = os.getenv("YANDEX_FOLDER_ID")
+
+    # Проверка наличия ключей
+    if not iam_token:
+        print("\n❌ ОШИБКА: Не найден YANDEX_IAM_TOKEN")
+        print("Создайте файл .env и добавьте переменную YANDEX_IAM_TOKEN")
+        sys.exit(1)
+
+    if not folder_id:
+        print("\n❌ ОШИБКА: Не найден YANDEX_FOLDER_ID")
+        print("Создайте файл .env и добавьте переменную YANDEX_FOLDER_ID")
+        sys.exit(1)
+
+    print("\n✅ Переменные окружения загружены")
+
+    # Инициализация клиента
+    try:
+        client = YandexGPTClient(iam_token, folder_id)
+        print("✅ Клиент инициализирован")
+    except Exception as e:
+        print(f"\n❌ ОШИБКА инициализации: {e}")
+        sys.exit(1)
+
+    # Тест подключения
+    print("\n🔄 Проверка подключения...")
+    if client.test_connection():
+        print("✅ Подключение успешно")
+    else:
+        print("❌ Подключение не удалось")
+        sys.exit(1)
+
+    # Базовый тестовый запрос
+    print("\n" + "=" * 80)
+    print("ТЕСТОВЫЙ ЗАПРОС")
+    print("=" * 80)
+
+    test_prompt = "Объясни кратко, что такое искусственный интеллект (не более 100 слов)"
+    print(f"\nЗапрос: {test_prompt}\n")
+
+    try:
+        response = client.generate(test_prompt, temperature=0.5)
+
+        print("ОТВЕТ МОДЕЛИ:")
+        print("-" * 80)
+        print(response["text"])
+        print("-" * 80)
+
+        print(f"\nСтатистика:")
+        print(f" • Входные токены: {response['tokens_input']}")
+        print(f" • Выходные токены: {response['tokens_output']}")
+        print(f" • Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    except Exception as e:
+        print(f"\n❌ ОШИБКА выполнения запроса: {e}")
+        sys.exit(1)
+
+    print("\n" + "=" * 80)
+    print("ЛАБОРАТОРНАЯ РАБОТА №1 ВЫПОЛНЕНА УСПЕШНО")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()
