@@ -1,0 +1,17 @@
+crewai
+crewai-tools
+langchain
+langchain-community
+langchain-core
+langgraph
+chromadb
+sentence-transformers
+python-dotenv
+requests
+pydantic
+jupyterlab
+pytest
+black
+flake8
+yandexcloud
+protobuf>=6.31.1
