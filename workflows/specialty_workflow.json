@@ -1,0 +1,418 @@
+{
+  "name": "Milk defect workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "milk-defect",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        176
+      ],
+      "webhookId": "week4-milk-defect-webhook",
+      "id": "b1b2d1d1-8ef2-4d80-a617-0bd44db71d01"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "defect_type",
+              "value": "={{$json.body.defect_type}}"
+            },
+            {
+              "name": "production_stage",
+              "value": "={{$json.body.production_stage || \"не указан\"}}"
+            },
+            {
+              "name": "symptoms",
+              "value": "={{$json.body.symptoms || \"не указаны\"}}"
+            },
+            {
+              "name": "line_id",
+              "value": "={{$json.body.line_id || \"не указана\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Normalize Defect Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        176
+      ],
+      "id": "0a086ff2-4f6f-490f-88cd-f88001431d22"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.YANDEX_IAM_TOKEN}}"
+            },
+            {
+              "name": "x-folder-id",
+              "value": "={{$env.YANDEX_FOLDER_ID}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "=json",
+        "specifyBody": "json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={\n  \"modelUri\": \"gpt://{{$env.YANDEX_FOLDER_ID}}/yandexgpt-lite/latest\",\n  \"completionOptions\": {\n    \"temperature\": 0.2,\n    \"maxTokens\": 80\n  },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"text\": \"Оцени серьёзность дефекта закупорки молочной тары по одной из категорий: critical, high, medium, low. Ответь только одним словом из списка.\"\n    },\n    {\n      \"role\": \"user\",\n      \"text\": \"Тип дефекта: {{$json.defect_type}}; Этап: {{$json.production_stage}}; Симптомы: {{$json.symptoms}}; Линия: {{$json.line_id}}\"\n    }\n  ]\n}\n",
+        "options": {}
+      },
+      "name": "YandexGPT Defect Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -800,
+        176
+      ],
+      "id": "8a0ee715-5dd4-4ea3-9d2f-70ae9094ef33"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "severity",
+              "value": "={{$json.result.alternatives[0].message.text.trim().toLowerCase()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Extract Severity",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        176
+      ],
+      "id": "47d7701e-d7ba-436a-b41a-eb0be4ff0332"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.severity}}",
+              "value2": "critical"
+            }
+          ]
+        }
+      },
+      "name": "IF Critical",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        176
+      ],
+      "id": "e8c56b9f-2e96-49c4-a4b5-e4a41f791a44"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.EMAIL_FROM}}",
+        "toEmail": "={{$env.EMAIL_TO}}",
+        "subject": "🚨 Критический дефект закупорки молочной тары",
+        "text": "=Обнаружен критический дефект закупорки молочной тары.\n\nТип дефекта: {{$node[\"Normalize Defect Input\"].json[\"defect_type\"]}}\nЭтап: {{$node[\"Normalize Defect Input\"].json[\"production_stage\"]}}\nСимптомы: {{$node[\"Normalize Defect Input\"].json[\"symptoms\"]}}\nЛиния: {{$node[\"Normalize Defect Input\"].json[\"line_id\"]}}\nСерьёзность: {{$node[\"Extract Severity\"].json[\"severity\"]}}\n",
+        "options": {}
+      },
+      "name": "Technologist Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        96
+      ],
+      "id": "c0ab0b0d-8a63-4a0f-a633-7b0dd15358e5",
+      "credentials": {
+        "smtp": {
+          "id": "v491FIQ4rNhBN9Zd",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1dYODX2W1Z4MD6kWvw4m6wA-Y0j_fR8KI4Hyv1EgL7QQ/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1dYODX2W1Z4MD6kWvw4m6wA-Y0j_fR8KI4Hyv1EgL7QQ/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message": "=Дефект: {{$node[\"Normalize Defect Input\"].json[\"defect_type\"]}} | Этап: {{$node[\"Normalize Defect Input\"].json[\"production_stage\"]}} | Симптомы: {{$node[\"Normalize Defect Input\"].json[\"symptoms\"]}}",
+            "contact": "={{$node[\"Normalize Defect Input\"].json[\"line_id\"]}}",
+            "priority": "={{$node[\"Extract Severity\"].json[\"severity\"]}}",
+            "category": "={{$node[\"Normalize Defect Input\"].json[\"defect_type\"]}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contact",
+              "displayName": "contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "accepted",
+              "displayName": "accepted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rejected",
+              "displayName": "rejected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ehlo",
+              "displayName": "ehlo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "envelopeTime",
+              "displayName": "envelopeTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageTime",
+              "displayName": "messageTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageSize",
+              "displayName": "messageSize",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "response",
+              "displayName": "response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "envelope",
+              "displayName": "envelope",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageId",
+              "displayName": "messageId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -144,
+        256
+      ],
+      "id": "e0f2fbf7-a2b4-4e34-9567-4318e8852ad0",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4VuNuNTpwCI4W0Du",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Defect Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Defect Input": {
+      "main": [
+        [
+          {
+            "node": "YandexGPT Defect Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YandexGPT Defect Classifier": {
+      "main": [
+        [
+          {
+            "node": "Extract Severity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Severity": {
+      "main": [
+        [
+          {
+            "node": "IF Critical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Critical": {
+      "main": [
+        [
+          {
+            "node": "Technologist Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Technologist Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "specialty-workflow-v1",
+  "meta": null,
+  "id": "milk-defect-workflow",
+  "tags": []
+}

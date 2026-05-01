@@ -1,0 +1,414 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "application",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        176
+      ],
+      "webhookId": "week4-application-webhook",
+      "id": "b8abf903-edea-48ab-926a-8226e9eef1ef"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "={{$json.body.message}}"
+            },
+            {
+              "name": "contact",
+              "value": "={{$json.body.contact || \"не указан\"}}"
+            },
+            {
+              "name": "priority",
+              "value": "={{$json.body.priority || \"normal\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        176
+      ],
+      "id": "fcee49d1-b409-4a76-8015-efdfbe13637a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.YANDEX_IAM_TOKEN}}"
+            },
+            {
+              "name": "x-folder-id",
+              "value": "={{$env.YANDEX_FOLDER_ID}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "=json",
+        "specifyBody": "json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={\n  \"modelUri\": \"gpt://{{$env.YANDEX_FOLDER_ID}}/yandexgpt-lite/latest\",\n  \"completionOptions\": {\n    \"temperature\": 0.3,\n    \"maxTokens\": 100\n  },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"text\": \"Классифицируй заявку как одну из категорий: техническая_поддержка, продажа, вопрос, жалоба. Ответь только названием категории.\"\n    },\n    {\n      \"role\": \"user\",\n      \"text\": \"{{$json.message}}\"\n    }\n  ]\n}\n",
+        "options": {}
+      },
+      "name": "YandexGPT Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -800,
+        176
+      ],
+      "id": "c4fca9e5-f354-450c-b9fc-2b8f4b1476a2"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "category",
+              "value": "={{$json.result.alternatives[0].message.text.trim()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Extract Category",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        176
+      ],
+      "id": "f3f50bb9-fc92-47e5-a04d-5db510624e36"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.category}}",
+              "value2": "техническая_поддержка"
+            }
+          ]
+        }
+      },
+      "name": "IF Tech Support",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        176
+      ],
+      "id": "29535c8c-295e-4e74-90b7-5db9ed4601f9"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.EMAIL_FROM}}",
+        "toEmail": "={{$env.EMAIL_TO}}",
+        "subject": "🔧 Новая заявка в техподдержку",
+        "text": "=Новая заявка классифицирована как техническая_поддержка.\n\nСообщение: {{$node[\"Normalize Input\"].json[\"message\"]}}\nКонтакт: {{$node[\"Normalize Input\"].json[\"contact\"]}}\nПриоритет: {{$node[\"Normalize Input\"].json[\"priority\"]}}\nКатегория: {{$node[\"Extract Category\"].json[\"category\"]}}\n",
+        "options": {}
+      },
+      "name": "Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        96
+      ],
+      "id": "b4edd7de-2ba2-498b-a904-d762ebb5ed98",
+      "webhookId": "67891caa-a1de-4e26-9dde-08f55cdf08cb",
+      "credentials": {
+        "smtp": {
+          "id": "v491FIQ4rNhBN9Zd",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1dYODX2W1Z4MD6kWvw4m6wA-Y0j_fR8KI4Hyv1EgL7QQ/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1dYODX2W1Z4MD6kWvw4m6wA-Y0j_fR8KI4Hyv1EgL7QQ/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contact",
+              "displayName": "contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "accepted",
+              "displayName": "accepted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rejected",
+              "displayName": "rejected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ehlo",
+              "displayName": "ehlo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "envelopeTime",
+              "displayName": "envelopeTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageTime",
+              "displayName": "messageTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageSize",
+              "displayName": "messageSize",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "response",
+              "displayName": "response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "envelope",
+              "displayName": "envelope",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "messageId",
+              "displayName": "messageId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -144,
+        256
+      ],
+      "id": "d51f8e4e-c8e0-43aa-91d5-f8554c692283",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4VuNuNTpwCI4W0Du",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "YandexGPT Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YandexGPT Classifier": {
+      "main": [
+        [
+          {
+            "node": "Extract Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Category": {
+      "main": [
+        [
+          {
+            "node": "IF Tech Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Tech Support": {
+      "main": [
+        [
+          {
+            "node": "Email Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Notification": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "adb45549-04d4-4712-b8a8-edfec98a12c5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3477185171bd894cfc658a302d91137444f71742c6d22a5d27b3a61827d599fb"
+  },
+  "id": "1VUBtPFWuuUOQj6u",
+  "tags": []
+}
