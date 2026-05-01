@@ -1,0 +1,25 @@
+# Dependencies for laboratory work 5: RAG system for document processing
+
+langchain>=0.1.0,<0.2.0
+langchain-community>=0.0.10,<0.1.0
+langchain-text-splitters>=0.0.1,<0.1.0
+langchain-chroma>=0.1.0,<0.2.0
+
+chromadb>=0.4.0,<0.5.0
+sentence-transformers>=2.2.0,<3.0.0
+
+pypdf>=3.17.0,<4.0.0
+python-docx>=1.1.0,<2.0.0
+unstructured>=0.11.0,<0.12.0
+markdown>=3.5.0,<4.0.0
+
+python-dotenv>=1.0.0,<2.0.0
+requests>=2.31.0,<3.0.0
+pydantic>=2.0.0,<3.0.0
+
+jupyterlab>=4.0.0,<5.0.0
+pytest>=7.0.0,<10.0.0
+black>=23.0.0
+flake8>=6.0.0
+
+yandexcloud>=0.240.0
