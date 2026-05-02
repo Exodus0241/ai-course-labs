@@ -1,0 +1,26 @@
+# Лабораторная работа №7 — Импульсные нейронные сети (SNN)
+# Apple Silicon (M1/M2/M3) совместимая конфигурация
+
+# SNN Framework
+snntorch
+torch
+torchvision
+
+# Data Processing
+numpy
+pandas
+scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+
+# Utilities
+python-dotenv
+tqdm
+
+# Development
+jupyterlab
+pytest
+black
+flake8
